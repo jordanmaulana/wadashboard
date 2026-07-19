@@ -70,3 +70,27 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid email or password")
         attrs["user"] = user
         return attrs
+
+
+class WhatsAppIngestSerializer(serializers.Serializer):
+    message = serializers.CharField(allow_blank=True, default="", trim_whitespace=False)
+    phone = serializers.CharField(max_length=32)
+    name = serializers.CharField(max_length=255, allow_blank=True, default="")
+    group_id = serializers.CharField(max_length=128)
+
+
+class WhatsAppBulkMembersSerializer(serializers.Serializer):
+    group_id = serializers.CharField(max_length=128)
+    phones = serializers.ListField(
+        child=serializers.CharField(allow_blank=True),
+        allow_empty=False,
+    )
+
+
+class WhatsAppGroupSeedSerializer(serializers.Serializer):
+    id = serializers.CharField(max_length=128)
+    name = serializers.CharField(max_length=255, allow_blank=True, default="")
+
+
+class WhatsAppSeedGroupsSerializer(serializers.Serializer):
+    groups = WhatsAppGroupSeedSerializer(many=True, allow_empty=False)

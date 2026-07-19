@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "core",
+    "whatsapp",
 ]
 
 REST_FRAMEWORK = {
@@ -133,6 +134,10 @@ MAYAR_BASE_URL = os.environ.get("MAYAR_BASE_URL", "https://api.mayar.id/hl/v1")
 PAYMENT_REDIRECT_URL = os.environ.get("PAYMENT_REDIRECT_URL", "http://localhost:5173/")
 
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
+
+# Shared secret the WhatsApp relay sends as the X-Callback-Token header.
+# Leave empty to reject all ingest calls.
+WHATSAPP_WEBHOOK_TOKEN = os.environ.get("WHATSAPP_WEBHOOK_TOKEN", "")
 
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000").rstrip("/")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")

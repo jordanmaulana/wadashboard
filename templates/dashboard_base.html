@@ -19,6 +19,10 @@
                class="rounded px-3 py-2 transition {% if current == 'dashboard' %}bg-blue-500/15 text-white border-l-2 border-blue-400 -ml-px pl-2.5{% else %}text-slate-300 hover:bg-white/5{% endif %}">
               Dashboard
             </a>
+            <a href="{% url 'whatsapp' %}"
+               class="rounded px-3 py-2 transition {% if current == 'whatsapp' %}bg-blue-500/15 text-white border-l-2 border-blue-400 -ml-px pl-2.5{% else %}text-slate-300 hover:bg-white/5{% endif %}">
+              WhatsApp
+            </a>
           </nav>
         </div>
         <div class="flex flex-col gap-3 border-t border-white/10 px-4 py-4 text-xs">

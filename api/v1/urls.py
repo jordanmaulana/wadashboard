@@ -1,6 +1,6 @@
 from django.urls import path
 
-from api.v1 import auth_api, payments_api
+from api.v1 import auth_api, payments_api, whatsapp_api
 
 urlpatterns = [
     path("auth/google/", auth_api.google, name="api-v1-auth-google"),
@@ -9,4 +9,7 @@ urlpatterns = [
     path("auth/logout/", auth_api.logout, name="api-v1-logout"),
     path("auth/me/", auth_api.me, name="api-v1-me"),
     path("payments/mayar/webhook/", payments_api.webhook, name="api-v1-mayar-webhook"),
+    path("whatsapp/messages/", whatsapp_api.ingest, name="api-v1-whatsapp-ingest"),
+    path("whatsapp/members/", whatsapp_api.bulk_members, name="api-v1-whatsapp-bulk-members"),
+    path("whatsapp/groups/", whatsapp_api.seed_groups, name="api-v1-whatsapp-seed-groups"),
 ]

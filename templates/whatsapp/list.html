@@ -1,0 +1,346 @@
+{% extends "dashboard_base.html" %}
+{% load humanize static %}
+{% block title %}WhatsApp{% endblock %}
+
+{% block head %}
+  <script src="{% static 'chart.umd.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+  <div class="flex items-end justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold">Aktivitas WhatsApp</h1>
+      <p class="mt-1 text-sm text-slate-600">Seberapa aktif anggota grup — dan siapa yang mulai diam.</p>
+    </div>
+    <span class="text-sm text-slate-500">{{ total|intcomma }} pesan · {{ start }} → {{ end }}</span>
+  </div>
+
+  {# --- Filter bar ----------------------------------------------------------- #}
+  <form method="get" class="mt-4 flex flex-wrap items-end gap-3">
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Grup</label>
+      <select name="group"
+              class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
+        <option value="">Semua grup</option>
+        {% for opt in group_options %}
+          <option value="{{ opt.group_id }}" {% if opt.group_id == group %}selected{% endif %}>
+            {{ opt.name|default:opt.group_id }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Dari</label>
+      <input type="date" name="start" value="{{ start }}"
+             class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm" />
+    </div>
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sampai</label>
+      <input type="date" name="end" value="{{ end }}"
+             class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm" />
+    </div>
+    <button type="submit"
+            class="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
+      Terapkan
+    </button>
+    <a href="{% url 'whatsapp' %}"
+       class="rounded-md px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+      Reset
+    </a>
+    <div class="flex flex-wrap gap-2">
+      {% for p in presets %}
+        <a href="?start={{ p.start }}&end={{ p.end }}{% if group %}&group={{ group }}{% endif %}"
+           class="rounded-full px-3 py-1.5 text-xs font-semibold {% if p.active %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+          {{ p.label }}
+        </a>
+      {% endfor %}
+    </div>
+  </form>
+
+  {# --- KPI tiles ------------------------------------------------------------ #}
+  <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    {% for k in kpis %}
+      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ k.label }}</p>
+        <p class="mt-2 text-3xl font-extrabold tabular-nums text-slate-900">{{ k.value|intcomma }}{{ k.suffix }}</p>
+        {% if k.delta and k.delta.pct != None %}
+          <p class="mt-2">
+            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold
+              {% if k.delta.dir == 'up' %}bg-emerald-100 text-emerald-700
+              {% elif k.delta.dir == 'down' %}bg-rose-100 text-rose-700
+              {% else %}bg-slate-100 text-slate-600{% endif %}">
+              {% if k.delta.dir == 'up' %}▲{% elif k.delta.dir == 'down' %}▼{% else %}■{% endif %} {{ k.delta.pct }}%
+            </span>
+            <span class="ml-1 text-xs text-slate-400">vs periode lalu</span>
+          </p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {# --- Activity over time --------------------------------------------------- #}
+  <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Aktivitas dari waktu ke waktu</h2>
+    <div class="relative mt-3 h-72">
+      <canvas id="chart-activity"></canvas>
+    </div>
+  </div>
+
+  {# --- Donut · Segmentation · New vs returning ------------------------------ #}
+  <div class="mt-4 grid gap-4 lg:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Aktif vs tidak aktif</h2>
+      <div class="relative mt-3 h-56">
+        <canvas id="chart-donut"></canvas>
+      </div>
+      <p class="mt-2 text-center text-xs text-slate-500">
+        {{ active_count|intcomma }} dari {{ roster_count|intcomma }} anggota aktif ({{ participation }}%)
+      </p>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Segmentasi keaktifan</h2>
+      <div class="relative mt-3 h-56">
+        <canvas id="chart-segments"></canvas>
+      </div>
+      <p class="mt-2 text-center text-xs text-slate-400">Berdasarkan jumlah pesan dalam periode</p>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Anggota aktif</h2>
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        <div class="rounded-xl bg-emerald-50 px-4 py-5 text-center">
+          <p class="text-3xl font-extrabold tabular-nums text-emerald-700">{{ new_count|intcomma }}</p>
+          <p class="mt-1 text-xs font-semibold text-emerald-700">Baru</p>
+        </div>
+        <div class="rounded-xl bg-blue-50 px-4 py-5 text-center">
+          <p class="text-3xl font-extrabold tabular-nums text-blue-700">{{ returning_count|intcomma }}</p>
+          <p class="mt-1 text-xs font-semibold text-blue-700">Kembali</p>
+        </div>
+      </div>
+      <p class="mt-3 text-xs text-slate-400">
+        "Baru" = pesan pertama mereka jatuh di dalam periode ini; "Kembali" = sudah pernah aktif sebelumnya.
+      </p>
+    </div>
+  </div>
+
+  {# --- Peak-time heatmap ---------------------------------------------------- #}
+  <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Waktu paling aktif</h2>
+    <p class="mt-1 text-xs text-slate-400">Jumlah pesan per hari &times; jam (waktu lokal). Warna makin pekat = makin ramai.</p>
+    <div class="mt-3 space-y-1">
+      <div class="flex items-center gap-1">
+        <span class="w-8 shrink-0"></span>
+        <div class="grid flex-1 gap-0.5" style="grid-template-columns: repeat(24, minmax(0, 1fr))">
+          {% for cell in heatmap.0.cells %}
+            <span class="text-center text-[9px] text-slate-400">{% if cell.h|divisibleby:3 %}{{ cell.h }}{% endif %}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% for row in heatmap %}
+        <div class="flex items-center gap-1">
+          <span class="w-8 shrink-0 text-xs font-medium text-slate-500">{{ row.day }}</span>
+          <div class="grid flex-1 gap-0.5" style="grid-template-columns: repeat(24, minmax(0, 1fr))">
+            {% for cell in row.cells %}
+              <div class="h-4 rounded-sm bg-slate-100" title="{{ row.day }} {{ cell.h }}:00 — {{ cell.c }} pesan"
+                   {% if cell.c %}style="background-color: rgba(37, 99, 235, {{ cell.op }})"{% endif %}></div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# --- Group breakdown (with inline rename + participation) ----------------- #}
+  <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Per grup</h2>
+  <div class="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Nama grup</th>
+          <th class="px-4 py-3">ID grup</th>
+          <th class="px-4 py-3 text-right">Pengirim</th>
+          <th class="px-4 py-3 text-right">Pesan</th>
+          <th class="px-4 py-3">Partisipasi</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for g in groups %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3">
+              <form method="post" class="flex items-center gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="group_id" value="{{ g.gid }}" />
+                <input type="text" name="name" value="{{ g.gname|default:'' }}"
+                       placeholder="Beri nama…"
+                       class="w-40 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+                <button type="submit"
+                        class="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                  Simpan
+                </button>
+              </form>
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ g.gid }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ g.senders }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-900">{{ g.count|intcomma }}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2" title="{{ g.senders }}/{{ g.roster }} anggota mengirim pesan">
+                <div class="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+                  <div class="h-full rounded-full bg-blue-500" style="width: {{ g.rate }}%"></div>
+                </div>
+                <span class="tabular-nums text-xs text-slate-500">{{ g.rate }}%</span>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">Belum ada pesan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# --- Inactive members (re-engagement list) -------------------------------- #}
+  <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    Perlu diaktifkan kembali
+    <span class="ml-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">{{ inactive_count|intcomma }}</span>
+  </h2>
+  <p class="mt-1 text-xs text-slate-400">Anggota yang terdaftar di grup tapi tidak mengirim pesan dalam periode ini. Menampilkan 5 paling baru diam.</p>
+  <div class="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Nama</th>
+          <th class="px-4 py-3">Telepon</th>
+          <th class="px-4 py-3">Grup</th>
+          <th class="px-4 py-3">Terakhir terlihat</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for m in inactive_members %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3 font-medium text-slate-900">{{ m.name|default:"—" }}</td>
+            <td class="px-4 py-3 tabular-nums text-slate-600">{{ m.phone }}</td>
+            <td class="px-4 py-3 text-slate-500">
+              {% for grp in m.groups.all %}{{ grp }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            </td>
+            <td class="px-4 py-3 text-slate-500">
+              {% if m.last_seen %}{{ m.last_seen|date:"d M Y" }}{% else %}<span class="text-slate-400">Belum pernah</span>{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="px-4 py-10 text-center text-slate-400">Semua anggota terdaftar aktif dalam periode ini. 🎉</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# --- Sender leaderboard --------------------------------------------------- #}
+  <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Papan peringkat pengirim</h2>
+  <div class="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3 text-right">#</th>
+          <th class="px-4 py-3">Nama</th>
+          <th class="px-4 py-3">Telepon</th>
+          <th class="px-4 py-3">Terakhir kirim</th>
+          <th class="px-4 py-3 text-right">Pesan</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in leaderboard %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3 text-right tabular-nums text-slate-400">{{ forloop.counter }}</td>
+            <td class="px-4 py-3 font-medium text-slate-900">{{ row.name|default:"—" }}</td>
+            <td class="px-4 py-3 tabular-nums text-slate-600">{{ row.phone }}</td>
+            <td class="px-4 py-3 text-slate-500">{{ row.last_at|date:"d M Y H:i" }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-900">{{ row.count|intcomma }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">Belum ada pesan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {{ activity|json_script:"wa-activity" }}
+  {{ segments|json_script:"wa-segments" }}
+  {{ donut|json_script:"wa-donut" }}
+  <script>
+    (function () {
+      const activity = JSON.parse(document.getElementById("wa-activity").textContent);
+      const segments = JSON.parse(document.getElementById("wa-segments").textContent);
+      const donut = JSON.parse(document.getElementById("wa-donut").textContent);
+      const muted = "#64748b", grid = "#e2e8f0";
+      Chart.defaults.font.family = "ui-sans-serif, system-ui, sans-serif";
+      Chart.defaults.color = muted;
+
+      // Activity over time — messages (bars) + distinct active senders (line), one axis.
+      new Chart(document.getElementById("chart-activity"), {
+        data: {
+          labels: activity.map((d) => d.date.slice(5)),
+          datasets: [
+            {
+              type: "bar", label: "Pesan", order: 2,
+              data: activity.map((d) => d.msgs),
+              backgroundColor: "rgba(59, 130, 246, 0.18)", borderColor: "#3b82f6",
+              borderWidth: 1, borderRadius: 4, maxBarThickness: 22,
+            },
+            {
+              type: "line", label: "Pengirim aktif", order: 1,
+              data: activity.map((d) => d.senders),
+              borderColor: "#059669", backgroundColor: "#059669",
+              borderWidth: 2, tension: 0.3, pointRadius: 0, pointHoverRadius: 4,
+            },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } },
+            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+          },
+          plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
+        },
+      });
+
+      // Active vs inactive.
+      new Chart(document.getElementById("chart-donut"), {
+        type: "doughnut",
+        data: {
+          labels: ["Aktif", "Tidak aktif"],
+          datasets: [{
+            data: [donut.active, donut.inactive],
+            backgroundColor: ["#10b981", "#cbd5e1"], borderColor: "#ffffff", borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: "62%",
+          plugins: { legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8 } } },
+        },
+      });
+
+      // Activity segmentation — ordinal buckets, sequential blue ramp (neutral for silent).
+      new Chart(document.getElementById("chart-segments"), {
+        type: "bar",
+        data: {
+          labels: segments.map((s) => s.label),
+          datasets: [{
+            label: "Anggota", data: segments.map((s) => s.value),
+            backgroundColor: ["#94a3b8", "#93c5fd", "#3b82f6", "#1d4ed8"],
+            borderRadius: 4, maxBarThickness: 26,
+          }],
+        },
+        options: {
+          indexAxis: "y", responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } },
+            y: { grid: { display: false } },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+    })();
+  </script>
+{% endblock %}

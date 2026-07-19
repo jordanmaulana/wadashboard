@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english/frontend && echo \"===FRONTEND ROOT===\" && rtk ls -la && echo \"===package.json===\" && rtk read package.json)",
+      "Read(//Volumes/ssd/kakjoeprojects/teman-english/frontend/**)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english && rtk find . -maxdepth 2 -name \"settings*.py\" -not -path \"*/node_modules/*\" 2>/dev/null; echo \"---MANAGE---\"; rtk find . -maxdepth 2 -name \"manage.py\" 2>/dev/null)",
+      "Read(//Volumes/ssd/kakjoeprojects/teman-english/**)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english && echo \"===MANAGE.PY===\" && rtk read manage.py && echo \"\" && echo \"===CORE DIR===\" && rtk ls -la core/)",
+      "Read(//Volumes/ssd/kakjoeprojects/**)",
+      "Read(//Volumes/ssd/kakjoeprojects/autoreply-manager/**)",
+      "Read(//Volumes/ssd/kakjoeprojects/teman-english/frontend/src/features/marketing/**)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/autoreply-manager/frontend && echo \"===package.json===\" && rtk read package.json && echo \"\" && echo \"===SRC TREE===\" && find src -type f | sort)",
+      "Read(//Volumes/ssd/kakjoeprojects/autoreply-manager/frontend/**)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english && echo \"===SERIALIZER LINES===\" && rtk grep -n \"WhatsApp\\\\|class .*Serializer\" api/v1/serializers.py | head -60)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english && echo \"===grep whatsapp/wa references repo-wide \\(py\\)===\" && rtk grep -rni \"whatsapp\" --include=*.py . --exclude-dir=.venv --exclude-dir=node_modules -l | sort && echo \"\" && echo \"===pyproject deps===\" && rtk read pyproject.toml)",
+      "Bash(cd /Volumes/ssd/kakjoeprojects/teman-english && echo \"===seed_demo whatsapp===\" && rtk grep -n -i \"whatsapp\\\\|Group\\\\|Member\\\\|Message\" core/management/commands/seed_demo.py | head -40 && echo \"\" && echo \"===profiles/models whatsapp===\" && rtk grep -n -i \"whatsapp\" profiles/models.py && echo \"\" && echo \"===dashboard_base nav===\" && rtk grep -n -i \"whatsapp\" templates/dashboard_base.html && echo \"\" && echo \"===template head/size===\" && rtk wc -l templates/whatsapp/list.html)",
+      "Bash(grep -iE '\\\\.\\(tsx|ts|jsx|js\\)$')",
+      "Read(//Volumes/ssd/kakjoeprojects/teman-english/whatsapp/**)"
+    ]
+  }
+}
